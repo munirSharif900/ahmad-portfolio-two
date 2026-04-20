@@ -8,7 +8,7 @@ export const sendContactMessage = async (name: string, email: string, subject: s
 
 
 export const receiveContactQueries = async () => {
-  const response = await api.get(API_ENDPOINTS.CONTACT.GET_ALL + "?page_size=50");
+  const response = await api.get(API_ENDPOINTS.CONTACT.RECEIVE + "?page_size=50");
   return response.data;
 };
 
