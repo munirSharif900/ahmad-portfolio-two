@@ -21,7 +21,7 @@ export interface TestimonialPayload {
   status: "Published" | "Hidden";
 }
 
-export const getAllTestimonials = async (params?: { status?: string; search?: string; page?: number }) => {
+export const getAllTestimonials = async (params?: { status?: string; search?: string; page?: number, page_size?: number }) => {
   const res = await api.get(API_ENDPOINTS.TESTIMONIAL.GET_ALL, { params });
   return res.data;
 };
