@@ -4,12 +4,25 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 
+interface SidebarProps {
+  mobileOpen?: boolean;
+  onMobileClose?: () => void;
+}
+
 const navItems = [
   {
     label: "Dashboard", href: "/admin/dashboard",
     icon: (
       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+      </svg>
+    ),
+  },
+  {
+    label: "Roles Management", href: "/admin/roles",
+    icon: (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
       </svg>
     ),
   },
@@ -47,12 +60,18 @@ const navItems = [
   },
 ];
 
-export default function Sidebar() {
+export default function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps) {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
 
   return (
-    <aside className={`${collapsed ? "w-16" : "w-60"} sticky top-0 h-screen bg-white dark:bg-gray-950 border-r border-gray-200 dark:border-gray-800 flex flex-col transition-all duration-300 flex-shrink-0`}>
+    <aside className={`
+      ${collapsed ? "w-16" : "w-60"}
+      fixed lg:sticky top-0 h-screen z-50 lg:z-auto
+      bg-white dark:bg-gray-950 border-r border-gray-200 dark:border-gray-800
+      flex flex-col transition-all duration-300 flex-shrink-0
+      ${mobileOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"}
+    `}>
       {/* Logo */}
       <div className="h-16 flex items-center justify-between px-4 border-b border-gray-200 dark:border-gray-800">
         {!collapsed && (
@@ -60,9 +79,21 @@ export default function Sidebar() {
             M.<span className="text-violet-500">Ahmad</span>
           </Link>
         )}
-        <button onClick={() => setCollapsed(!collapsed)} className="text-gray-500 dark:text-gray-400 hover:text-violet-400 transition-colors ml-auto">
+        <button
+          onClick={() => { setCollapsed(!collapsed); onMobileClose?.(); }}
+          className="text-gray-500 dark:text-gray-400 hover:text-violet-400 transition-colors ml-auto lg:flex hidden"
+        >
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={collapsed ? "M13 5l7 7-7 7M5 5l7 7-7 7" : "M11 19l-7-7 7-7m8 14l-7-7 7-7"} />
+          </svg>
+        </button>
+        {/* Mobile close button */}
+        <button
+          onClick={onMobileClose}
+          className="text-gray-500 dark:text-gray-400 hover:text-violet-400 transition-colors ml-auto lg:hidden"
+        >
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
           </svg>
         </button>
       </div>
@@ -73,6 +104,7 @@ export default function Sidebar() {
           const active = pathname === item.href;
           return (
             <Link key={item.href} href={item.href}
+              onClick={onMobileClose}
               className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all group relative
                 ${active ? "bg-violet-600 text-white shadow-lg shadow-violet-900/40" : "text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-white"}`}>
               <span className="flex-shrink-0">{item.icon}</span>

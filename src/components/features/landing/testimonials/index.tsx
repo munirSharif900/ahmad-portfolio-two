@@ -3,18 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import Link from "next/link";
-
-const allTestimonials = [
-  { name: "Sarah Johnson", role: "CEO", company: "TechStart", rating: 5, text: "Muhammad delivered an outstanding website that exceeded our expectations. His attention to detail and communication were top-notch. The project was delivered ahead of schedule.", avatar: "SJ" },
-  { name: "Ali Hassan", role: "Product Manager", company: "DevCo", rating: 5, text: "Incredibly talented developer. He built our entire platform from scratch and delivered on time. The code quality was exceptional and well-documented. Highly recommended!", avatar: "AH" },
-  { name: "Emily Clarke", role: "Founder", company: "DesignHub", rating: 5, text: "Working with Ahmad was a pleasure. Clean code, great design sense, and always responsive to feedback. He transformed our vision into a beautiful, functional product.", avatar: "EC" },
-  { name: "James Wilson", role: "CTO", company: "StartupXYZ", rating: 5, text: "Ahmad's technical skills are impressive. He tackled complex backend challenges with ease and delivered a scalable solution. Our platform handles 10x more traffic now.", avatar: "JW" },
-  { name: "Fatima Malik", role: "Marketing Director", company: "BrandCo", rating: 5, text: "The landing page Ahmad built for us increased our conversion rate by 40%. His understanding of UX and performance optimization is outstanding.", avatar: "FM" },
-  { name: "David Chen", role: "Engineering Lead", company: "FinTech Inc", rating: 5, text: "Exceptional full-stack developer. Ahmad integrated our payment system flawlessly and the admin dashboard he built saves our team hours every week.", avatar: "DC" },
-  { name: "Aisha Raza", role: "CEO", company: "EduPlatform", rating: 5, text: "Our LMS was built by Ahmad and it's been running flawlessly for over a year. Students love the interface and the backend is rock solid. Couldn't be happier.", avatar: "AR" },
-  { name: "Michael Torres", role: "Freelance Designer", company: "Self-employed", rating: 5, text: "I've collaborated with Ahmad on multiple client projects. He's my go-to developer — reliable, fast, and produces beautiful code. A true professional.", avatar: "MT" },
-  { name: "Zara Ahmed", role: "Product Owner", company: "RetailTech", rating: 5, text: "Ahmad rebuilt our entire e-commerce platform in record time. The new site is faster, more beautiful, and our sales have increased by 60% since launch.", avatar: "ZA" },
-];
+import { getAllTestimonials, TestimonialAPI } from "@/src/api/services/testimonials";
 
 const avatarColors = ["from-violet-600 to-purple-800", "from-cyan-600 to-blue-800", "from-pink-600 to-rose-800", "from-emerald-600 to-teal-800", "from-amber-600 to-orange-800"];
 
@@ -116,6 +105,15 @@ function Stars({ count }: { count: number }) {
 
 export default function TestimonialsView() {
   const [hovered, setHovered] = useState<number | null>(null);
+  const [testimonials, setTestimonials] = useState<TestimonialAPI[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    getAllTestimonials({ status: "Published", page_size: 50 })
+      .then(data => setTestimonials(Array.isArray(data) ? data : data.results ?? []))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
 
   return (
     <>
@@ -155,7 +153,7 @@ export default function TestimonialsView() {
           {/* Stats bar */}
           <Reveal delay={100}>
             <div className="flex flex-wrap justify-center gap-12 mb-16">
-              {[["9+", "Happy Clients"], ["100%", "Satisfaction Rate"], ["5★", "Average Rating"], ["30+", "Projects Delivered"]].map(([val, label]) => (
+              {[[`${testimonials.length || 9}+`, "Happy Clients"], ["100%", "Satisfaction Rate"], ["5★", "Average Rating"], ["30+", "Projects Delivered"]].map(([val, label]) => (
                 <div key={label} className="text-center">
                   <p className="text-4xl font-black text-violet-500 dark:text-violet-400">{val}</p>
                   <p className="text-gray-500 text-sm mt-1">{label}</p>
@@ -166,41 +164,38 @@ export default function TestimonialsView() {
 
           {/* Testimonials grid */}
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {allTestimonials.map((t, i) => (
-              <Reveal key={t.name} delay={i * 70}>
-                <div
-                  className="t-card bg-gray-50 dark:bg-gray-900/70 backdrop-blur border border-gray-200 dark:border-gray-800 rounded-2xl p-7 flex flex-col h-full cursor-default"
-                  onMouseEnter={() => setHovered(i)}
-                  onMouseLeave={() => setHovered(null)}
-                >
-                  {/* Quote mark */}
-                  <div className={`text-6xl font-black leading-none mb-4 quote-anim ${hovered === i ? "text-violet-500 dark:text-violet-400" : "text-violet-200 dark:text-violet-800"} transition-colors duration-300`}
-                    style={{ animationDelay: `${i * 60}ms` }}>
-                    "
-                  </div>
-
-                  {/* Stars */}
-                  <div className="mb-4"><Stars count={t.rating} /></div>
-
-                  {/* Text */}
-                  <p className="text-gray-600 dark:text-gray-300 text-sm leading-relaxed flex-1 mb-6">{t.text}</p>
-
-                  {/* Divider */}
-                  <div className={`neon-line mb-5 transition-opacity duration-300 ${hovered === i ? "opacity-100" : "opacity-30"}`} />
-
-                  {/* Author */}
-                  <div className="flex items-center gap-4">
-                    <div className={`w-12 h-12 rounded-full bg-gradient-to-br ${avatarColors[i % avatarColors.length]} flex items-center justify-center text-white font-bold text-sm flex-shrink-0 avatar-ring ${hovered === i ? "avatar-ring-active" : ""}`}>
-                      {t.avatar}
-                    </div>
-                    <div>
-                      <p className="font-semibold text-gray-900 dark:text-white text-sm">{t.name}</p>
-                      <p className="text-violet-500 dark:text-violet-400 text-xs">{t.role} @ {t.company}</p>
-                    </div>
-                  </div>
-                </div>
-              </Reveal>
+            {loading && Array.from({ length: 6 }).map((_, i) => (
+              <div key={i} className="bg-gray-50 dark:bg-gray-900/70 border border-gray-200 dark:border-gray-800 rounded-2xl p-7 h-64 animate-pulse" />
             ))}
+            {!loading && testimonials.map((t, i) => {
+              const avatar = t.name.split(" ").map((w: string) => w[0]).join("").slice(0, 2).toUpperCase();
+              return (
+                <Reveal key={t.id} delay={i * 70}>
+                  <div
+                    className="t-card bg-gray-50 dark:bg-gray-900/70 backdrop-blur border border-gray-200 dark:border-gray-800 rounded-2xl p-7 flex flex-col h-full cursor-default"
+                    onMouseEnter={() => setHovered(i)}
+                    onMouseLeave={() => setHovered(null)}
+                  >
+                    <div className={`text-6xl font-black leading-none mb-4 quote-anim ${hovered === i ? "text-violet-500 dark:text-violet-400" : "text-violet-200 dark:text-violet-800"} transition-colors duration-300`}
+                      style={{ animationDelay: `${i * 60}ms` }}>
+                      "
+                    </div>
+                    <div className="mb-4"><Stars count={t.rating} /></div>
+                    <p className="text-gray-600 dark:text-gray-300 text-sm leading-relaxed flex-1 mb-6">{t.review_text}</p>
+                    <div className={`neon-line mb-5 transition-opacity duration-300 ${hovered === i ? "opacity-100" : "opacity-30"}`} />
+                    <div className="flex items-center gap-4">
+                      <div className={`w-12 h-12 rounded-full bg-gradient-to-br ${avatarColors[i % avatarColors.length]} flex items-center justify-center text-white font-bold text-sm flex-shrink-0 avatar-ring ${hovered === i ? "avatar-ring-active" : ""}`}>
+                        {avatar}
+                      </div>
+                      <div>
+                        <p className="font-semibold text-gray-900 dark:text-white text-sm">{t.name}</p>
+                        <p className="text-violet-500 dark:text-violet-400 text-xs">{t.role} @ {t.company}</p>
+                      </div>
+                    </div>
+                  </div>
+                </Reveal>
+              );
+            })}
           </div>
 
           {/* CTA */}

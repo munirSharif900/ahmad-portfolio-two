@@ -5,6 +5,7 @@ export const API_ENDPOINTS = {
   CONTACT:{
     SEND:'/contact-queries/',
     RECEIVE:'/contact-queries/',
+    GET_ALL:'/contact-queries/',
     MARK_READ: (id: number) => `/contact-queries/${id}/mark-read/`,
     MARK_ALLREAD: '/contact-queries/mark-all-read/',
     DELETE: (id: number) => `/contact-queries/${id}/`,

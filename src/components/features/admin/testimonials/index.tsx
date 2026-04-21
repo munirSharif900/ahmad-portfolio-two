@@ -1,17 +1,33 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useForm, Controller } from "react-hook-form";
+import { toast } from "react-toastify";
 import FormField from "@/src/components/shared/FormField";
-import { useTestimonialStore, type Testimonial } from "@/src/store/useTestimonialStore";
+import {
+  getAllTestimonials,
+  createTestimonial,
+  updateTestimonial,
+  deleteTestimonial,
+  TestimonialAPI,
+  TestimonialPayload,
+} from "@/src/api/services/testimonials";
 
-type TestimonialForm = Omit<Testimonial, "id">;
+function parseError(e: any, fallback: string): string {
+  const data = e?.response?.data;
+  if (!data) return fallback;
+  if (typeof data === "string") return data;
+  if (data.detail) return data.detail;
+  return Object.entries(data)
+    .map(([f, v]) => `${f}: ${Array.isArray(v) ? v.join(", ") : v}`)
+    .join(" | ") || fallback;
+}
 
 const rules = {
   name:    { required: "Name is required", minLength: { value: 2, message: "At least 2 characters" } },
   company: { required: "Company is required" },
   role:    { required: "Role is required" },
-  text:    { required: "Review text is required", minLength: { value: 10, message: "At least 10 characters" }, maxLength: { value: 500, message: "Max 500 characters" } },
+  text:    { required: "Review text is required", minLength: { value: 10, message: "At least 10 characters" }, maxLength: { value: 1000, message: "Max 1000 characters" } },
   status:  { required: "Status is required" },
 };
 
@@ -21,25 +37,27 @@ function Stars({ count, onChange }: { count: number; onChange?: (n: number) => v
       {Array.from({ length: 5 }).map((_, i) => (
         <button key={i} type="button" onClick={() => onChange?.(i + 1)}
           className={`${i < count ? "text-amber-400" : "text-gray-700"} ${onChange ? "hover:text-amber-300 cursor-pointer" : "cursor-default"} transition-colors`}>
-          <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" /></svg>
+          <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+            <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+          </svg>
         </button>
       ))}
     </div>
   );
 }
 
-function TestimonialFormModal({ defaultValues, onSave, onCancel, submitLabel }: {
-  defaultValues: TestimonialForm;
-  onSave: (data: TestimonialForm) => void;
+function TestimonialFormModal({ defaultValues, onSave, onCancel, submitLabel, saving }: {
+  defaultValues: TestimonialPayload;
+  onSave: (data: TestimonialPayload) => void;
   onCancel: () => void;
   submitLabel: string;
+  saving: boolean;
 }) {
-  const { control, handleSubmit, setValue, watch, formState: { errors, isValid, isDirty } } = useForm<TestimonialForm>({
+  const { control, handleSubmit, setValue, watch, formState: { errors, isValid } } = useForm<TestimonialPayload>({
     defaultValues,
     mode: "onChange",
   });
-
-  const rating = watch("rating");
+  const rating = watch("rating") ?? 5;
 
   return (
     <form onSubmit={handleSubmit(onSave)} noValidate className="space-y-3">
@@ -53,56 +71,108 @@ function TestimonialFormModal({ defaultValues, onSave, onCancel, submitLabel }: 
         <Controller control={control} name="role" rules={rules.role}
           render={({ field }) => <FormField label="Role" value={field.value} onChange={field.onChange} error={errors.role?.message} />} />
         <Controller control={control} name="status" rules={rules.status}
-          render={({ field }) => <FormField as="select" label="Status" value={field.value} onChange={field.onChange} error={errors.status?.message}
-            options={[{ label: "Published", value: "Published" }, { label: "Hidden", value: "Hidden" }]} />} />
+          render={({ field }) => (
+            <FormField as="select" label="Status" value={field.value} onChange={field.onChange} error={errors.status?.message}
+              options={[{ label: "Published", value: "Published" }, { label: "Hidden", value: "Hidden" }]} />
+          )} />
       </div>
       <div>
         <label className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider block mb-1.5">Rating</label>
         <Stars count={rating} onChange={(n) => setValue("rating", n, { shouldDirty: true })} />
       </div>
-      <Controller control={control} name="text" rules={rules.text}
-        render={({ field }) => <FormField as="textarea" label="Review Text" rows={3} value={field.value} onChange={field.onChange} error={errors.text?.message} />} />
+      <Controller control={control} name="review_text" rules={rules.text}
+        render={({ field }) => <FormField as="textarea" label="Review Text" rows={3} value={field.value} onChange={field.onChange} error={errors.review_text?.message} />} />
       <div className="flex gap-3 pt-2">
-        <button type="submit" disabled={!isValid || !isDirty}
+        <button type="submit" disabled={saving}
           className="flex-1 bg-violet-600 hover:bg-violet-500 disabled:opacity-40 disabled:cursor-not-allowed text-white py-2.5 rounded-lg text-sm font-semibold transition-colors">
-          {submitLabel}
+          {saving ? "Saving..." : submitLabel}
         </button>
-        <button type="button" onClick={onCancel} className="flex-1 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 py-2.5 rounded-lg text-sm transition-colors">Cancel</button>
+        <button type="button" onClick={onCancel}
+          className="flex-1 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 py-2.5 rounded-lg text-sm transition-colors">
+          Cancel
+        </button>
       </div>
     </form>
   );
 }
 
 export default function AdminTestimonialsView() {
-  const { testimonials, search, filterStatus, setSearch, setFilterStatus, addTestimonial, updateTestimonial, deleteTestimonial, toggleStatus } = useTestimonialStore();
-  const [modal, setModal] = useState<"add" | "edit" | "view" | "delete" | null>(null);
-  const [selected, setSelected] = useState<Testimonial | null>(null);
+  const [testimonials, setTestimonials] = useState<TestimonialAPI[]>([]);
+  const [loading, setLoading]           = useState(true);
+  const [saving, setSaving]             = useState(false);
+  const [search, setSearch]             = useState("");
+  const [filterStatus, setFilterStatus] = useState("All");
+  const [modal, setModal]               = useState<"add" | "edit" | "view" | "delete" | null>(null);
+  const [selected, setSelected]         = useState<TestimonialAPI | null>(null);
 
-  const filtered = testimonials.filter(t => {
-    const matchSearch = t.name.toLowerCase().includes(search.toLowerCase()) || t.company.toLowerCase().includes(search.toLowerCase());
-    const matchStatus = filterStatus === "All" || t.status === filterStatus;
-    return matchSearch && matchStatus;
-  });
+  const fetchTestimonials = useCallback(async () => {
+    try {
+      setLoading(true);
+      const params: any = {};
+      if (filterStatus !== "All") params.status = filterStatus; // Title case: Published/Hidden
+      if (search) params.search = search;
+      const data = await getAllTestimonials(params);
+      setTestimonials(Array.isArray(data) ? data : data.results ?? []);
+    } catch {
+      toast.error("Failed to load testimonials");
+    } finally {
+      setLoading(false);
+    }
+  }, [filterStatus, search]);
 
-  const openAdd = () => { setSelected(null); setModal("add"); };
-  const openEdit = (t: Testimonial) => { setSelected(t); setModal("edit"); };
-  const openView = (t: Testimonial) => { setSelected(t); setModal("view"); };
-  const openDelete = (t: Testimonial) => { setSelected(t); setModal("delete"); };
+  useEffect(() => { fetchTestimonials(); }, [fetchTestimonials]);
 
-  const handleSave = (data: TestimonialForm) => {
-    if (modal === "add") addTestimonial(data);
-    else if (modal === "edit" && selected) updateTestimonial(selected.id, data);
-    setModal(null);
-  };
+  const openAdd    = () => { setSelected(null); setModal("add"); };
+  const openEdit   = (t: TestimonialAPI) => { setSelected(t); setModal("edit"); };
+  const openView   = (t: TestimonialAPI) => { setSelected(t); setModal("view"); };
+  const openDelete = (t: TestimonialAPI) => { setSelected(t); setModal("delete"); };
 
-  const handleDelete = () => {
-    if (selected) deleteTestimonial(selected.id);
-    setModal(null);
-  };
+  async function handleSave(data: TestimonialPayload) {
+    try {
+      setSaving(true);
+      if (modal === "add") {
+        await createTestimonial(data);
+        toast.success("Testimonial added");
+      } else if (modal === "edit" && selected) {
+        await updateTestimonial(selected.id, data);
+        toast.success("Testimonial updated");
+      }
+      setModal(null);
+      fetchTestimonials();
+    } catch (e: any) {
+      toast.error(parseError(e, "Failed to save testimonial"));
+    } finally {
+      setSaving(false);
+    }
+  }
 
-  const getDefaultValues = (t?: Testimonial | null): TestimonialForm => ({
+  async function handleDelete() {
+    if (!selected) return;
+    try {
+      setSaving(true);
+      await deleteTestimonial(selected.id);
+      toast.success("Testimonial deleted");
+      setModal(null);
+      fetchTestimonials();
+    } catch (e: any) {
+      toast.error(parseError(e, "Failed to delete testimonial"));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleToggleStatus(t: TestimonialAPI) {
+    try {
+      await updateTestimonial(t.id, { status: t.status === "Published" ? "Hidden" : "Published" });
+      fetchTestimonials();
+    } catch (e: any) {
+      toast.error(parseError(e, "Failed to update status"));
+    }
+  }
+
+  const getDefaultValues = (t?: TestimonialAPI | null): TestimonialPayload => ({
     name: t?.name ?? "", role: t?.role ?? "", company: t?.company ?? "",
-    rating: t?.rating ?? 5, text: t?.text ?? "", status: t?.status ?? "Published",
+    rating: t?.rating ?? 5, review_text: t?.review_text ?? "", status: t?.status ?? "Published",
   });
 
   return (
@@ -118,7 +188,9 @@ export default function AdminTestimonialsView() {
           </select>
         </div>
         <button onClick={openAdd} className="flex items-center gap-2 bg-violet-600 hover:bg-violet-500 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors">
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+          </svg>
           Add Testimonial
         </button>
       </div>
@@ -136,22 +208,29 @@ export default function AdminTestimonialsView() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100 dark:divide-gray-800/60">
-              {filtered.length === 0 && (
+              {loading && (
+                <tr><td colSpan={5} className="text-center py-12 text-gray-400">Loading...</td></tr>
+              )}
+              {!loading && testimonials.length === 0 && (
                 <tr><td colSpan={5} className="text-center py-12 text-gray-400 dark:text-gray-600">No testimonials found</td></tr>
               )}
-              {filtered.map(t => (
+              {!loading && testimonials.map(t => (
                 <tr key={t.id} className="hover:bg-gray-50 dark:hover:bg-gray-900/50 transition-colors">
                   <td className="px-5 py-4">
                     <p className="font-medium text-gray-900 dark:text-white">{t.name}</p>
                     <p className="text-xs text-gray-500">{t.role} @ {t.company}</p>
                   </td>
                   <td className="px-5 py-4 max-w-xs">
-                    <p className="text-gray-500 dark:text-gray-400 text-xs truncate">{t.text}</p>
+                    <p className="text-gray-500 dark:text-gray-400 text-xs truncate">{t.review_text}</p>
                   </td>
                   <td className="px-5 py-4"><Stars count={t.rating} /></td>
                   <td className="px-5 py-4">
-                    <button onClick={() => toggleStatus(t.id)}
-                      className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${t.status === "Published" ? "bg-emerald-900/40 text-emerald-400 border-emerald-800 hover:bg-emerald-900/70" : "bg-gray-100 dark:bg-gray-800 text-gray-500 border-gray-300 dark:border-gray-700 hover:bg-gray-200 dark:hover:bg-gray-700"}`}>
+                    <button onClick={() => handleToggleStatus(t)}
+                      className={`text-xs px-2.5 py-1 rounded-full border transition-colors capitalize ${
+                        t.status === "Published"
+                          ? "bg-emerald-900/40 text-emerald-400 border-emerald-800 hover:bg-emerald-900/70"
+                          : "bg-gray-100 dark:bg-gray-800 text-gray-500 border-gray-300 dark:border-gray-700 hover:bg-gray-200 dark:hover:bg-gray-700"
+                      }`}>
                       {t.status}
                     </button>
                   </td>
@@ -174,7 +253,7 @@ export default function AdminTestimonialsView() {
           </table>
         </div>
         <div className="px-5 py-3 border-t border-gray-100 dark:border-gray-800 text-xs text-gray-400 dark:text-gray-600">
-          Showing {filtered.length} of {testimonials.length} testimonials
+          Showing {testimonials.length} testimonials
         </div>
       </div>
 
@@ -190,10 +269,12 @@ export default function AdminTestimonialsView() {
                     <h2 className="text-xl font-bold text-gray-900 dark:text-white">{selected.name}</h2>
                     <p className="text-violet-500 dark:text-violet-400 text-sm">{selected.role} @ {selected.company}</p>
                   </div>
-                  <button onClick={() => setModal(null)} className="text-gray-400 hover:text-gray-700 dark:hover:text-white"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg></button>
+                  <button onClick={() => setModal(null)} className="text-gray-400 hover:text-gray-700 dark:hover:text-white">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                  </button>
                 </div>
                 <Stars count={selected.rating} />
-                <p className="text-gray-600 dark:text-gray-300 text-sm leading-relaxed mt-4 mb-6">"{selected.text}"</p>
+                <p className="text-gray-600 dark:text-gray-300 text-sm leading-relaxed mt-4 mb-6">"{selected.review_text}"</p>
                 <div className="flex gap-3">
                   <button onClick={() => openEdit(selected)} className="flex-1 bg-violet-600 hover:bg-violet-500 text-white py-2 rounded-lg text-sm font-medium transition-colors">Edit</button>
                   <button onClick={() => setModal(null)} className="flex-1 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 py-2 rounded-lg text-sm transition-colors">Close</button>
@@ -205,13 +286,16 @@ export default function AdminTestimonialsView() {
               <div className="p-6">
                 <div className="flex items-center justify-between mb-5">
                   <h2 className="text-lg font-bold text-gray-900 dark:text-white">{modal === "add" ? "Add Testimonial" : "Edit Testimonial"}</h2>
-                  <button onClick={() => setModal(null)} className="text-gray-400 hover:text-gray-700 dark:hover:text-white"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg></button>
+                  <button onClick={() => setModal(null)} className="text-gray-400 hover:text-gray-700 dark:hover:text-white">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                  </button>
                 </div>
                 <TestimonialFormModal
                   defaultValues={getDefaultValues(selected)}
                   onSave={handleSave}
                   onCancel={() => setModal(null)}
                   submitLabel={modal === "add" ? "Add Testimonial" : "Save Changes"}
+                  saving={saving}
                 />
               </div>
             )}
@@ -222,9 +306,13 @@ export default function AdminTestimonialsView() {
                   <svg className="w-7 h-7 text-red-500 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                 </div>
                 <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-2">Delete Testimonial?</h2>
-                <p className="text-gray-500 dark:text-gray-400 text-sm mb-6">Remove testimonial from <span className="text-gray-900 dark:text-white font-medium">{selected.name}</span>? This cannot be undone.</p>
+                <p className="text-gray-500 dark:text-gray-400 text-sm mb-6">
+                  Remove testimonial from <span className="text-gray-900 dark:text-white font-medium">{selected.name}</span>? This cannot be undone.
+                </p>
                 <div className="flex gap-3">
-                  <button onClick={handleDelete} className="flex-1 bg-red-600 hover:bg-red-500 text-white py-2.5 rounded-lg text-sm font-semibold transition-colors">Delete</button>
+                  <button onClick={handleDelete} disabled={saving} className="flex-1 bg-red-600 hover:bg-red-500 disabled:opacity-60 text-white py-2.5 rounded-lg text-sm font-semibold transition-colors">
+                    {saving ? "Deleting..." : "Delete"}
+                  </button>
                   <button onClick={() => setModal(null)} className="flex-1 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 py-2.5 rounded-lg text-sm transition-colors">Cancel</button>
                 </div>
               </div>

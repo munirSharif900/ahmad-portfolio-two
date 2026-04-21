@@ -1,24 +1,62 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useContactQueryStore, type ContactQuery as Query } from "@/src/store/useContactQueryStore";
 
 export default function AdminContactQueriesView() {
-  const { queries, search, filterRead, setSearch, setFilterRead, markRead, toggleRead, markAllRead, deleteQuery } = useContactQueryStore();
+  const { queries, search, filterRead, loading, error, setSearch, setFilterRead, fetchQueries, markRead, markAllRead, deleteQuery } = useContactQueryStore();
   const [selected, setSelected] = useState<Query | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Query | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
+
+  useEffect(() => {
+    fetchQueries();
+  }, [fetchQueries]);
 
   const filtered = queries.filter(q => {
     const matchSearch = q.name.toLowerCase().includes(search.toLowerCase()) || q.email.toLowerCase().includes(search.toLowerCase()) || q.message.toLowerCase().includes(search.toLowerCase());
-    const matchRead = filterRead === "All" || (filterRead === "Unread" && !q.read) || (filterRead === "Read" && q.read);
+    const matchRead = filterRead === "All" || (filterRead === "Unread" && !q.is_read) || (filterRead === "Read" && q.is_read);
     return matchSearch && matchRead;
   });
 
-  const unreadCount = queries.filter(q => !q.read).length;
+  const unreadCount = queries.filter(q => !q.is_read).length;
 
-  const handleDelete = (id: number) => { deleteQuery(id); setDeleteTarget(null); if (selected?.id === id) setSelected(null); };
+  const handleDelete = async (id: number) => {
+    setDeleting(true);
+    setDeleteError(null);
+    try {
+      await deleteQuery(id);
+      setDeleteTarget(null);
+      if (selected?.id === id) setSelected(null);
+    } catch (error: any) {
+      setDeleteError(error?.message || "Failed to delete. Please try again.");
+    } finally {
+      setDeleting(false);
+    }
+  };
 
-  const openView = (q: Query) => { setSelected(q); markRead(q.id); };
+  const openView = async (q: Query) => {
+    setSelected(q);
+    if (!q.is_read) await markRead(q.id);
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-violet-500"></div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl p-6 text-center">
+        <p className="text-red-600 dark:text-red-400">{error}</p>
+        <button onClick={fetchQueries} className="mt-3 text-sm text-violet-500 hover:text-violet-400">Retry</button>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-5">
@@ -64,23 +102,22 @@ export default function AdminContactQueriesView() {
                 <tr><td colSpan={6} className="text-center py-12 text-gray-400 dark:text-gray-600">No queries found</td></tr>
               )}
               {filtered.map(q => (
-                <tr key={q.id} className={`transition-colors hover:bg-gray-50 dark:hover:bg-gray-900/50 ${!q.read ? "bg-violet-50 dark:bg-violet-950/10" : ""}`}>
+                <tr key={q.id} className={`transition-colors hover:bg-gray-50 dark:hover:bg-gray-900/50 ${!q.is_read ? "bg-violet-50 dark:bg-violet-950/10" : ""}`}>
                   <td className="pl-5 py-4">
-                    {!q.read && <span className="w-2 h-2 rounded-full bg-violet-500 block" />}
+                    {!q.is_read && <span className="w-2 h-2 rounded-full bg-violet-500 block" />}
                   </td>
                   <td className="px-5 py-4">
-                    <p className={`font-medium ${!q.read ? "text-gray-900 dark:text-white" : "text-gray-600 dark:text-gray-300"}`}>{q.name}</p>
+                    <p className={`font-medium ${!q.is_read ? "text-gray-900 dark:text-white" : "text-gray-600 dark:text-gray-300"}`}>{q.name}</p>
                     <a href={`mailto:${q.email}`} className="text-xs text-violet-500 dark:text-violet-400 hover:underline">{q.email}</a>
                   </td>
                   <td className="px-5 py-4 max-w-sm">
                     <p className="text-gray-500 dark:text-gray-400 text-xs truncate">{q.message}</p>
                   </td>
-                  <td className="px-5 py-4 text-gray-400 dark:text-gray-500 text-xs whitespace-nowrap">{q.date}</td>
+                  <td className="px-5 py-4 text-gray-400 dark:text-gray-500 text-xs whitespace-nowrap">{new Date(q.created_at).toLocaleString()}</td>
                   <td className="px-5 py-4">
-                    <button onClick={() => toggleRead(q.id)}
-                      className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${q.read ? "bg-gray-100 dark:bg-gray-800 text-gray-500 border-gray-300 dark:border-gray-700 hover:bg-gray-200 dark:hover:bg-gray-700" : "bg-violet-900/40 text-violet-400 border-violet-800 hover:bg-violet-900/70"}`}>
-                      {q.read ? "Read" : "Unread"}
-                    </button>
+                    <span className={`text-xs px-2.5 py-1 rounded-full border ${q.is_read ? "bg-gray-100 dark:bg-gray-800 text-gray-500 border-gray-300 dark:border-gray-700" : "bg-violet-900/40 text-violet-400 border-violet-800"}`}>
+                      {q.is_read ? "Read" : "Unread"}
+                    </span>
                   </td>
                   <td className="px-5 py-4">
                     <div className="flex items-center justify-end gap-1">
@@ -119,10 +156,16 @@ export default function AdminContactQueriesView() {
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
                 </button>
               </div>
+              {selected.subject && (
+                <div className="mb-3">
+                  <p className="text-xs text-gray-500 dark:text-gray-400">Subject</p>
+                  <p className="text-sm font-medium text-gray-900 dark:text-white">{selected.subject}</p>
+                </div>
+              )}
               <div className="bg-gray-50 dark:bg-gray-950 rounded-xl p-4 mb-5">
                 <p className="text-gray-700 dark:text-gray-300 text-sm leading-relaxed">{selected.message}</p>
               </div>
-              <p className="text-xs text-gray-400 dark:text-gray-600 mb-5">Received: {selected.date}</p>
+              <p className="text-xs text-gray-400 dark:text-gray-600 mb-5">Received: {new Date(selected.created_at).toLocaleString()}</p>
               <div className="flex gap-3">
                 <a href={`mailto:${selected.email}`}
                   className="flex-1 flex items-center justify-center gap-2 bg-violet-600 hover:bg-violet-500 text-white py-2.5 rounded-lg text-sm font-medium transition-colors">
@@ -150,9 +193,12 @@ export default function AdminContactQueriesView() {
             </div>
             <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-2">Delete Query?</h2>
             <p className="text-gray-500 dark:text-gray-400 text-sm mb-6">Delete message from <span className="text-gray-900 dark:text-white font-medium">{deleteTarget.name}</span>? This cannot be undone.</p>
+            {deleteError && <p className="text-red-400 text-xs mb-3">{deleteError}</p>}
             <div className="flex gap-3">
-              <button onClick={() => handleDelete(deleteTarget.id)} className="flex-1 bg-red-600 hover:bg-red-500 text-white py-2.5 rounded-lg text-sm font-semibold transition-colors">Delete</button>
-              <button onClick={() => setDeleteTarget(null)} className="flex-1 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 py-2.5 rounded-lg text-sm transition-colors">Cancel</button>
+              <button onClick={() => handleDelete(deleteTarget.id)} disabled={deleting} className="flex-1 bg-red-600 hover:bg-red-500 disabled:opacity-50 disabled:cursor-not-allowed text-white py-2.5 rounded-lg text-sm font-semibold transition-colors">
+                {deleting ? "Deleting..." : "Delete"}
+              </button>
+              <button onClick={() => { setDeleteTarget(null); setDeleteError(null); }} disabled={deleting} className="flex-1 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 py-2.5 rounded-lg text-sm transition-colors">Cancel</button>
             </div>
           </div>
         </div>
