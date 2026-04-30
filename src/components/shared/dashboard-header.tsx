@@ -9,6 +9,7 @@ import useAuth from "@/src/api/hooks/useAuth";
 
 const titles: Record<string, string> = {
   "/admin/dashboard": "Dashboard",
+  "/admin/services": "Services",
   "/admin/roles": "Manage Roles",
   "/admin/projects": "Projects",
   "/admin/testimonials": "Testimonials",

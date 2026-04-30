@@ -1,48 +1,98 @@
 import { create } from "zustand";
+import {
+  getNotifications,
+  getUnreadCount,
+  markNotificationRead,
+  markAllNotificationsRead,
+  deleteNotificationApi,
+} from "@/src/api/services/notifications";
 
-export type NotificationType = "message" | "project" | "testimonial" | "system";
+export type NotificationType =
+  | "testimonial_created"
+  | "testimonial_updated"
+  | "project_created"
+  | "project_updated"
+  | "service_created"
+  | "service_updated"
+  | "query_submitted";
 
 export type Notification = {
   id: number;
-  type: NotificationType;
   title: string;
-  desc: string;
-  time: string;
-  read: boolean;
+  body: string;
+  type: NotificationType;
+  is_read: boolean;
+  data: Record<string, unknown>;
+  created_at: string;
 };
 
 type NotificationStore = {
   notifications: Notification[];
+  unreadCount: number;
   activeFilter: string;
+  loading: boolean;
   setActiveFilter: (v: string) => void;
-  markRead: (id: number) => void;
-  markAllRead: () => void;
-  deleteNotification: (id: number) => void;
-  unreadCount: () => number;
+  fetchNotifications: () => Promise<void>;
+  fetchUnreadCount: () => Promise<void>;
+  markRead: (id: number) => Promise<void>;
+  markAllRead: () => Promise<void>;
+  deleteNotification: (id: number) => Promise<void>;
 };
 
-const initialNotifications: Notification[] = [
-  { id: 1,  type: "message",     title: "New contact query",       desc: "Sarah Johnson sent a project inquiry about an e-commerce platform.",          time: "2 minutes ago", read: false },
-  { id: 2,  type: "project",     title: "Project updated",         desc: "E-Commerce Platform has been marked as Live.",                                 time: "1 hour ago",    read: false },
-  { id: 3,  type: "testimonial", title: "New testimonial",         desc: "Ali Hassan left a 5-star review. Awaiting your approval.",                    time: "3 hours ago",   read: false },
-  { id: 4,  type: "message",     title: "New contact query",       desc: "Emily Clarke asked about your availability for a React project.",             time: "1 day ago",     read: true  },
-  { id: 5,  type: "project",     title: "Project archived",        desc: "Blog Platform has been moved to Archived status.",                            time: "2 days ago",    read: true  },
-  { id: 6,  type: "system",      title: "Portfolio site deployed", desc: "Your portfolio was successfully deployed to production.",                     time: "3 days ago",    read: true  },
-  { id: 7,  type: "testimonial", title: "Testimonial hidden",      desc: "David Chen's testimonial has been set to Hidden.",                            time: "4 days ago",    read: true  },
-  { id: 8,  type: "message",     title: "New contact query",       desc: "James Carter from BuildFast wants to discuss a full-stack project.",          time: "5 days ago",    read: true  },
-  { id: 9,  type: "system",      title: "Admin login detected",    desc: "New login from Chrome on Windows. If this wasn't you, change your password.", time: "6 days ago",    read: true  },
-  { id: 10, type: "project",     title: "New project added",       desc: "AI Chat Dashboard has been added to your projects list.",                     time: "1 week ago",    read: true  },
-];
-
 export const useNotificationStore = create<NotificationStore>((set, get) => ({
-  notifications: initialNotifications,
+  notifications: [],
+  unreadCount: 0,
   activeFilter: "All",
+  loading: false,
+
   setActiveFilter: (v) => set({ activeFilter: v }),
-  markRead: (id) =>
-    set((s) => ({ notifications: s.notifications.map((n) => (n.id === id ? { ...n, read: true } : n)) })),
-  markAllRead: () =>
-    set((s) => ({ notifications: s.notifications.map((n) => ({ ...n, read: true })) })),
-  deleteNotification: (id) =>
-    set((s) => ({ notifications: s.notifications.filter((n) => n.id !== id) })),
-  unreadCount: () => get().notifications.filter((n) => !n.read).length,
+
+  fetchNotifications: async () => {
+    set({ loading: true });
+    try {
+      const raw = await getNotifications();
+      // Handle all possible response shapes
+      let list: Notification[] = [];
+      if (Array.isArray(raw)) {
+        list = raw;
+      } else if (raw && Array.isArray(raw.results)) {
+        list = raw.results;
+      }
+      set({ notifications: list, unreadCount: list.filter((n: Notification) => !n.is_read).length });
+    } finally {
+      set({ loading: false });
+    }
+  },
+
+  fetchUnreadCount: async () => {
+    try {
+      const data = await getUnreadCount();
+      set({ unreadCount: data.count ?? data.unread_count ?? 0 });
+    } catch {}
+  },
+
+  markRead: async (id) => {
+    await markNotificationRead(id);
+    set((s) => ({
+      notifications: s.notifications.map((n) => (n.id === id ? { ...n, is_read: true } : n)),
+      unreadCount: Math.max(0, s.unreadCount - 1),
+    }));
+  },
+
+  markAllRead: async () => {
+    await markAllNotificationsRead();
+    set((s) => ({
+      notifications: s.notifications.map((n) => ({ ...n, is_read: true })),
+      unreadCount: 0,
+    }));
+  },
+
+  deleteNotification: async (id) => {
+    await deleteNotificationApi(id);
+    const wasUnread = get().notifications.find((n) => n.id === id)?.is_read === false;
+    set((s) => ({
+      notifications: s.notifications.filter((n) => n.id !== id),
+      unreadCount: wasUnread ? Math.max(0, s.unreadCount - 1) : s.unreadCount,
+    }));
+  },
 }));

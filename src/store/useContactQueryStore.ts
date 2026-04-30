@@ -13,7 +13,7 @@ export type ContactQuery = {
   subject: string;
   message: string;
   created_at: string;
-  is_read: boolean;
+  status: "read" | "unread";
 };
 
 type ContactQueryStore = {
@@ -55,15 +55,15 @@ export const useContactQueryStore = create<ContactQueryStore>((set, get) => ({
   markRead: async (id) => {
     await markContactRead(id);
     set((s) => ({
-      queries: s.queries.map((q) => (q.id === id ? { ...q, is_read: true } : q)),
+      queries: s.queries.map((q) => (q.id === id ? { ...q, status: "read" } : q)),
     }));
   },
 
   markAllRead: async () => {
     await markAllContactRead();
-    set((s) => ({
-      queries: s.queries.map((q) => ({ ...q, is_read: true })),
-    }));
+    // Re-fetch from API to get actual server state
+    const data = await receiveContactQueries();
+    set({ queries: data.results ?? data });
   },
 
   deleteQuery: async (id) => {

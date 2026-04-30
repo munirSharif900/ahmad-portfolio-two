@@ -1,12 +1,20 @@
 "use client";
 
-import React from "react";
+import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import Reveal from "./Reveal";
-import { projects } from "./_data";
 import { GitHubIcon, ExternalLinkIcon, ArrowRightIcon } from "@/src/assets/icons";
+import { getAllPortfolio, PortfolioAPI } from "@/src/api/services/portfolio";
 
 export default function ProjectsSection() {
+  const [projects, setProjects] = useState<PortfolioAPI[]>([]);
+
+  useEffect(() => {
+    getAllPortfolio({ page_size: 4 })
+      .then(data => setProjects(Array.isArray(data) ? data : data.results ?? []))
+      .catch(() => {});
+  }, []);
+
   return (
     <section id="projects" className="py-24 bg-gray-100 dark:bg-gray-900">
       <div className="max-w-6xl mx-auto px-6">
@@ -21,29 +29,31 @@ export default function ProjectsSection() {
           </div>
         </Reveal>
         <div className="grid sm:grid-cols-2 gap-6">
-          {projects.map((p, i) => (
-            <Reveal key={p.title} delay={i * 120}>
-              <div className="bg-white dark:bg-gray-950 border border-gray-200 dark:border-gray-800 rounded-xl p-6 hover:border-violet-600 transition-all hover:-translate-y-1 hover:shadow-lg hover:shadow-violet-900/20 h-full">
-                <h3 className="text-xl font-semibold mb-2 text-gray-900 dark:text-white">{p.title}</h3>
-                <p className="text-gray-500 dark:text-gray-400 text-sm mb-4 leading-relaxed">{p.desc}</p>
-                <div className="flex flex-wrap gap-2 mb-5">
-                  {p.tech.map((t) => (
-                    <span key={t} className="text-xs bg-violet-900/40 text-violet-300 px-3 py-1 rounded-full border border-violet-800">{t}</span>
-                  ))}
+          {projects.map((p, i) => {
+            const tech = p.tech_stack ? p.tech_stack.split(",").map(t => t.trim()).filter(Boolean) : [];
+            return (
+              <Reveal key={p.id} delay={i * 120}>
+                <div className="bg-white dark:bg-gray-950 border border-gray-200 dark:border-gray-800 rounded-xl p-6 hover:border-violet-600 transition-all hover:-translate-y-1 hover:shadow-lg hover:shadow-violet-900/20 h-full">
+                  {p.image && <img src={p.image} alt={p.title} className="w-full h-36 object-cover rounded-lg mb-4" />}
+                  <h3 className="text-xl font-semibold mb-2 text-gray-900 dark:text-white">{p.title}</h3>
+                  <p className="text-gray-500 dark:text-gray-400 text-sm mb-4 leading-relaxed">{p.description}</p>
+                  <div className="flex flex-wrap gap-2 mb-5">
+                    {tech.map(t => (
+                      <span key={t} className="text-xs bg-violet-900/40 text-violet-300 px-3 py-1 rounded-full border border-violet-800">{t}</span>
+                    ))}
+                  </div>
+                  <div className="flex gap-4">
+                    <a href={p.github_url} target="_blank" rel="noreferrer" className="flex items-center gap-1.5 text-sm text-gray-500 dark:text-gray-400 hover:text-violet-400 transition-colors">
+                      <GitHubIcon className="w-4 h-4" />GitHub
+                    </a>
+                    <a href={p.live_url} target="_blank" rel="noreferrer" className="flex items-center gap-1.5 text-sm text-gray-500 dark:text-gray-400 hover:text-violet-400 transition-colors">
+                      <ExternalLinkIcon className="w-4 h-4" />Live Demo
+                    </a>
+                  </div>
                 </div>
-                <div className="flex gap-4">
-                  <a href={p.github} target="_blank" rel="noreferrer" className="flex items-center gap-1.5 text-sm text-gray-500 dark:text-gray-400 hover:text-violet-400 transition-colors">
-                    <GitHubIcon className="w-4 h-4" />
-                    GitHub
-                  </a>
-                  <a href={p.live} className="flex items-center gap-1.5 text-sm text-gray-500 dark:text-gray-400 hover:text-violet-400 transition-colors">
-                    <ExternalLinkIcon className="w-4 h-4" />
-                    Live Demo
-                  </a>
-                </div>
-              </div>
-            </Reveal>
-          ))}
+              </Reveal>
+            );
+          })}
         </div>
       </div>
     </section>

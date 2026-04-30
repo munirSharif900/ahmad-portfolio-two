@@ -6,8 +6,8 @@ const MAX_SIZE_MB = 2;
 const ACCEPTED = ["image/jpeg", "image/png", "image/webp", "image/gif"];
 
 interface Props {
-  value?: string;           // current preview (base64 or URL)
-  onChange: (base64: string) => void;
+  value?: string;
+  onChange: (base64: string, file?: File) => void;
   onClear: () => void;
   error?: string;
 }
@@ -28,7 +28,7 @@ export default function ImageDropZone({ value, onChange, onClear, error }: Props
       return;
     }
     const reader = new FileReader();
-    reader.onload = (e) => onChange(e.target?.result as string);
+    reader.onload = (e) => onChange(e.target?.result as string, file);
     reader.readAsDataURL(file);
   }, [onChange]);
 

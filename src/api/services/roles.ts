@@ -16,9 +16,30 @@ export interface CreateUserPayload {
   role: string;
 }
 
-export const getAllUsers = async () => {
-  const res = await api.get(API_ENDPOINTS.ROLES.GET_ALL);
-  return res.data;
+export interface UsersResponse {
+  results: RoleUserAPI[];
+  count: number;
+  page_size: number;
+  total_count: number;
+  total_pages: number;
+  has_next: boolean;
+}
+
+export const getAllUsers = async (params?: { search?: string; role?: string; page?: number; page_size?: number }): Promise<UsersResponse> => {
+  const res = await api.get(API_ENDPOINTS.ROLES.GET_ALL, { params });
+  const data = res.data;
+  // Normalize: handle both flat array and paginated object responses
+  if (Array.isArray(data)) {
+    return { results: data, count: data.length, page_size: data.length, total_count: data.length, total_pages: 1, has_next: false };
+  }
+  return {
+    results: Array.isArray(data.results) ? data.results : [],
+    count: data.count ?? 0,
+    page_size: data.page_size ?? 10,
+    total_count: data.total_count ?? data.count ?? 0,
+    total_pages: data.total_pages ?? 1,
+    has_next: data.has_next ?? false,
+  };
 };
 
 export const createUser = async (payload: CreateUserPayload) => {
